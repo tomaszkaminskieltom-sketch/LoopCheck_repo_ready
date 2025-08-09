@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LoopCheck — Zs checker (PWA)</title>
+<meta name="theme-color" content="#ffffff" />
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<style>
+  :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --accent:#2563eb;
+          --ok:#16a34a22; --bad:#dc262622; --ok-border:#16a34a; --bad-border:#dc2626; }
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial; background:var(--bg);color:var(--text)}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 80px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
+  h1{font-size:22px;margin:0}
+  .card{background:var(--card);border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.06);padding:14px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (min-width:980px){.row{grid-template-columns:repeat(5,1fr)}}
+  label{font-size:12px;color:var(--muted);display:block;margin:4px 0}
+  input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;font-size:14px}
+  button{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-size:14px;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.25)}
+  button.secondary{background:#111827;box-shadow:0 4px 14px rgba(17,24,39,.18)}
+  button.ghost{background:transparent;color:var(--accent);box-shadow:none}
+  .mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}
+  .flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .right{margin-left:auto}
+  table{width:100%;border-collapse:collapse;margin-top:10px;background:#fff;border-radius:12px;overflow:hidden}
+  th,td{padding:10px 8px;border-bottom:1px solid #f1f5f9;text-align:left;font-size:14px}
+  th{background:#f8fafc;font-weight:600;color:#334155}
+  tr.ok{background:var(--ok)} tr.bad{background:var(--bad);font-weight:700}
+  tr.ok td.status{color:var(--ok-border);font-weight:700} tr.bad td.status{color:var(--bad-border)}
+  .muted{color:var(--muted);font-size:12px}
+  .footer{margin-top:16px;color:var(--muted);font-size:12px}
+  .chip{background:#e5edff;color:#1e40af;border:1px solid #bfdbfe;padding:2px 8px;border-radius:999px;font-size:12px}
+  .danger{color:#dc2626}
+  .hint{background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:8px 10px;border-radius:10px;font-size:13px}
+  @media print{
+    body{background:#fff} header,.actions,.footer,.hint,.importArea{display:none!important}
+    .wrap{padding:0;margin:0} h1{margin:0 0 8px 0} .card{box-shadow:none;padding:0}
+    table{border:1px solid #e5e7eb} @page{size:A4;margin:12mm} thead{display:table-header-group}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>LoopCheck — Sprawdzenie Z<sub>s</sub></h1>
+      <div class="right muted">Wersja: <span id="appVersion">1.4.0</span></div>
+    </header>
+
+    <div class="card mt-12">
+      <div class="row">
+        <div>
+          <label>Adres obiektu</label>
+          <input id="addr" placeholder="np. Gliwice, ul. Przykładowa 1" />
+        </div>
+        <div>
+          <label>Data pomiaru</label>
+          <input id="date" type="date" />
+        </div>
+        <div class="importArea" style="grid-column: span 3;">
+          <label>Wczytaj własną tabelę ETI (CSV: In;Ia_0.4s;Ia_5s) — opcjonalnie</label>
+          <input id="etiCsv" type="file" accept=".csv" />
+          <div class="muted"><span id="etiStatus">Załadowano wbudowaną tabelę NEOZED. Możesz nadpisać własnym CSV.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-12">
+      <h3 style="margin:2px 0 10px 0">Nowy pomiar</h3>
+      <div class="row">
+        <div>
+          <label>Miejsce pomiaru</label>
+          <input id="place" placeholder="np. RG / gniazdo 2.05" />
+        </div>
+        <div>
+          <label>Zs — zmierzona impedancja [Ω]</label>
+          <input id="zs" type="number" step="0.0001" min="0" placeholder="np. 0.42" />
+        </div>
+        <div>
+          <label>Typ zabezpieczenia</label>
+          <select id="type">
+            <option value="B">Wyłącznik B</option>
+            <option value="C">Wyłącznik C</option>
+            <option value="D">Wyłącznik D</option>
+            <option value="gGx4">gG — krotność ×4</option>
+            <option value="gG_ETI">gG — ETI (NEOZED)</option>
+          </select>
+        </div>
+        <div>
+          <label>In — prąd znamionowy [A]</label>
+          <input id="in" type="number" step="1" min="1" placeholder="np. 16" />
+        </div>
+        <div>
+          <label>U₀ — napięcie [V] (wykorzystywane do „Prądu obliczonego”)</label>
+          <input id="u0" type="number" step="1" min="1" placeholder="230" />
+        </div>
+      </div>
+      <div class="row mt-8">
+        <div>
+          <label>Ia — prąd zadziałania [A] (opcjonalnie)</label>
+          <input id="ia" type="number" step="1" min="1" placeholder="puste = wg typu/tabeli" />
+        </div>
+        <div>
+          <label>Czas zadziałania (dla ETI)</label>
+          <select id="etiTime">
+            <option value="0.2">0,2 s</option>
+            <option value="0.4" selected>0,4 s</option>
+            <option value="5">5 s</option>
+          </select>
+          <div class="muted">Domyślnie: In ≤ 32A → 0,4 s; In > 32A → 5 s.</div>
+        </div>
+        <div style="align-self:end">
+          <button id="add">Dodaj pomiar</button>
+        </div>
+      </div>
+      <div class="muted mt-8">
+        <b>Zmax</b> liczony z <b>230 V</b>. <b>Prąd obliczony</b> = U₀/Zs (dla wpisanego napięcia).
+      </div>
+    </div>
+
+    <div class="card mt-12">
+      <div class="actions flex">
+        <div class="chip">Lista pomiarów</div>
+        <div class="right flex">
+          <button id="exportPdf" class="secondary">Pobierz PDF</button>
+          <button id="exportCsv">Eksport CSV</button>
+          <button id="clearAll" class="ghost danger">Wyczyść wszystkie</button>
+        </div>
+      </div>
+
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>Miejsce</th><th>Zs [Ω]</th><th>Typ</th><th>In [A]</th><th>U₀ [V]</th><th>Ia [A]</th><th>Zmax [Ω]</th><th>Prąd obliczony [A]</th><th>Status</th><th>Akcje</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="footer">Zmax = 230/Ia; I_obl = U₀/Zs.</div>
+    </div>
+
+    <template id="rowTpl">
+      <tr>
+        <td class="nr"></td>
+        <td class="place"></td>
+        <td class="zs"></td>
+        <td class="type"></td>
+        <td class="in"></td>
+        <td class="u0"></td>
+        <td class="ia"></td>
+        <td class="zmax"></td>
+        <td class="icalc"></td>
+        <td class="status statusTxt"></td>
+        <td class="actions">
+          <button class="ghost editBtn">Edytuj</button>
+          <button class="ghost danger delBtn">Usuń</button>
+        </td>
+      </tr>
+    </template>
+  </div>
+
+<script>
+(function(){
+  const ver = '1.4.0';
+  document.getElementById('appVersion').textContent = ver;
+
+  const U0_FOR_ZMAX = 230;
+  const embeddedETI = {"2": {"0.4": 16, "5": 8}, "4": {"0.4": 31, "5": 18}, "6": {"0.4": 49, "5": 25}, "10": {"0.4": 74, "5": 43}, "16": {"0.4": 115, "5": 67}, "20": {"0.4": 145, "5": 82}, "25": {"0.4": 202, "5": 110}, "32": {"0.4": 235, "5": 133}};
+  const state = { addr:'', date:new Date().toISOString().slice(0,10), rows:[], eti: embeddedETI };
+  const saved = localStorage.getItem('loopcheck-data-v5'); if(saved){ try{ Object.assign(state, JSON.parse(saved)); }catch{} }
+  const $ = s => document.querySelector(s);
+  $('#addr').value = state.addr || '';
+  $('#date').value = state.date || new Date().toISOString().slice(0,10);
+  const save = ()=> localStorage.setItem('loopcheck-data-v5', JSON.stringify(state));
+
+  const etiStatus = document.getElementById('etiStatus');
+  const updateEtiStatus = ()=>{
+    const keys = Object.keys(state.eti||{});
+    etiStatus.textContent = keys.length ? `Tabela ETI aktywna (pozycje: ${keys.length})` : 'Brak tabeli ETI — użyj krotności ×4 lub wczytaj CSV.';
+  };
+  updateEtiStatus();
+
+  document.getElementById('etiCsv').addEventListener('change', async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    const map = {}
+    for (let i=0;i<lines.length;i++){
+      const parts = lines[i].split(/;|,\s*/).map(s=>s.trim());
+      if (!parts[0] || parts[0].toLowerCase().startsWith('in')) continue;
+      const inn = parseFloat(parts[0].replace(',','.'));
+      const ia04 = parts[1] ? parseFloat(parts[1].replace(',','.')) : undefined;
+      const ia5 = parts[2] ? parseFloat(parts[2].replace(',','.')) : undefined;
+      if (isFinite(inn) && (isFinite(ia04) || isFinite(ia5))) map[inn] = {'0.4': ia04, '5': ia5};
+    }
+    state.eti = map; save(); updateEtiStatus();
+    alert('Tabela ETI została wczytana.');
+  });
+
+  const factorFor = type => ({B:5, C:10, D:20, gGx4:4}[type] || 5);
+  const pickEtiIa = (inn, t)=>{
+    const e = (state.eti||{})[inn];
+    if(!e) return null;
+    const key = String(t);
+    if(e[key]) return e[key];
+    return null;
+  };
+
+  const calc = row => {
+    let ia;
+    if (row.iaManual && row.iaManual>0) {
+      ia = row.iaManual;
+    } else if (row.type === 'gG_ETI') {
+      const defTime = row.in <= 32 ? '0.4' : '5';
+      const tt = row.etiTime || defTime;
+      ia = pickEtiIa(row.in, tt);
+      if (!ia) { ia = factorFor('gGx4') * row.in; }
+    } else {
+      ia = factorFor(row.type) * row.in;
+    }
+    const zmax = U0_FOR_ZMAX / ia;            // stałe 230 V do warunku
+    const icalc = row.zs ? (row.u0 / row.zs) : null; // prąd obliczony z wpisanego U0
+    return { ia, zmax, icalc, ok: row.zs <= zmax };
+  };
+
+  const fmt = (n,d=3)=> (typeof n==='number' && isFinite(n)) ? n.toFixed(d) : '';
+
+  const render = ()=>{
+    const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML='';
+    (state.rows||[]).forEach((r,i)=>{
+      const t = document.getElementById('rowTpl').content.cloneNode(true);
+      const {ia, zmax, icalc, ok} = calc(r);
+      t.querySelector('.nr').textContent = i+1;
+      t.querySelector('.place').textContent = r.place || '';
+      t.querySelector('.zs').textContent = fmt(r.zs,4);
+      t.querySelector('.type').textContent = r.type;
+      t.querySelector('.in').textContent = r.in;
+      t.querySelector('.u0').textContent = r.u0;
+      t.querySelector('.ia').textContent = ia ? Math.round(ia) : '';
+      t.querySelector('.zmax').textContent = fmt(zmax,4);
+      t.querySelector('.icalc').textContent = icalc ? Math.round(icalc) : '';
+      t.querySelector('.statusTxt').textContent = ok ? 'OK' : 'NIE';
+      const tr = t.querySelector('tr'); tr.classList.toggle('ok', ok); tr.classList.toggle('bad', !ok);
+      t.querySelector('.editBtn').addEventListener('click', ()=> editRow(i));
+      t.querySelector('.delBtn').addEventListener('click', ()=> { state.rows.splice(i,1); save(); render(); });
+      tbody.appendChild(t);
+    });
+  };
+
+  const valNum = (el, name)=>{
+    const v = parseFloat(el.value.replace(',','.'));
+    if (!isFinite(v) || v<=0) throw new Error(`Pole "${name}" musi być > 0`);
+    return v;
+  };
+
+  const addRow = ()=>{
+    try{
+      const place = document.getElementById('place').value.trim();
+      const zs = valNum(document.getElementById('zs'),'Zs');
+      const type = document.getElementById('type').value;
+      const inn = Math.round(valNum(document.getElementById('in'),'In'));
+      const u0 = Math.round(parseFloat(document.getElementById('u0').value || '230'));
+      let iaManual = parseFloat(document.getElementById('ia').value.replace(',','.'));
+      if (!isFinite(iaManual) || iaManual<=0) iaManual = null;
+      let etiTime = document.getElementById('etiTime').value;
+      if (type === 'gG_ETI') {
+        etiTime = inn <= 32 ? '0.4' : '5';
+        document.getElementById('etiTime').value = etiTime;
+      }
+      state.rows = state.rows || [];
+      state.rows.push({ id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+'-'+Math.random()), place, zs, type, in: inn, u0, iaManual, etiTime });
+      ['place','zs','in','u0','ia'].forEach(id=> document.getElementById(id).value='');
+      document.getElementById('type').value='B';
+      save(); render();
+    }catch(e){ alert(e.message); }
+  };
+
+  const editRow = i => {
+    const r = state.rows[i];
+    const place = prompt('Miejsce pomiaru:', r.place || ''); if(place===null) return;
+    const zs = prompt('Zs [Ω]:', r.zs); if (zs===null) return;
+    const type = prompt('Typ (B/C/D/gGx4/gG_ETI):', r.type) || r.type;
+    const inn = prompt('In [A]:', r.in); if (inn===null) return;
+    const u0 = prompt('U₀ [V]:', r.u0); if (u0===null) return;
+    const ia = prompt('Ia [A] (puste = auto):', r.iaManual ?? '');
+    const etiTime = prompt('Czas ETI (0.4 lub 5):', r.etiTime || (r.in<=32?'0.4':'5'));
+    try{
+      const nzs = parseFloat(String(zs).replace(',','.')); if(!isFinite(nzs)||nzs<=0) throw new Error('Zs nieprawidłowe');
+      const nIn = Math.round(parseFloat(inn)); if(!isFinite(nIn)||nIn<=0) throw new Error('In nieprawidłowe');
+      const nU0 = Math.round(parseFloat(u0)); if(!isFinite(nU0)||nU0<=0) throw new Error('U₀ nieprawidłowe');
+      let nIa = parseFloat(String(ia).replace(',','.')); if(!isFinite(nIa)||nIa<=0) nIa = null;
+      r.place = place.trim();
+      r.zs=nzs; r.type=(/^(B|C|D|gGx4|gG_ETI)$/i.test(type)?type: r.type); r.in=nIn; r.u0=nU0; r.iaManual=nIa;
+      r.etiTime = (etiTime==='0.4' || etiTime==='5') ? etiTime : (nIn<=32?'0.4':'5');
+      save(); render();
+    }catch(err){ alert(err.message); }
+  };
+
+  const updateMeta = ()=>{ state.addr=document.getElementById('addr').value.trim(); state.date=document.getElementById('date').value; save(); };
+  document.getElementById('addr').addEventListener('input', updateMeta);
+  document.getElementById('date').addEventListener('change', updateMeta);
+  document.getElementById('add').addEventListener('click', addRow);
+  document.getElementById('clearAll').addEventListener('click', ()=>{ if(confirm('Usunąć wszystkie pomiary?')){ state.rows=[]; save(); render(); } });
+
+  document.getElementById('exportCsv').addEventListener('click', ()=>{
+    const head = ['Nr','Miejsce','Zs [Ω]','Typ','In [A]','U0 [V]','Ia [A]','Zmax [Ω]','Prad obliczony [A]','Status'];
+    const lines = [head.join(';')];
+    (state.rows||[]).forEach((r,i)=>{ const {ia,zmax,icalc,ok}=calc(r); lines.push([i+1,(r.place||''), (r.zs||'').toFixed? r.zs.toFixed(4): r.zs, r.type, r.in, r.u0, ia?Math.round(ia):'', zmax.toFixed(4), icalc?Math.round(icalc):'', ok?'OK':'NIE'].join(';')); });
+    const csv = lines.join('\n');
+    const addrSafe = (state.addr || 'Adres').replace(/[^\p{L}0-9 _-]/gu,'').replace(/\s+/g,'_');
+    const name = `Pomiary_${state.date || new Date().toISOString().slice(0,10)}_${addrSafe}.csv`;
+    const blob = new Blob(["\ufeff"+csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('exportPdf').addEventListener('click', ()=>{
+    const oldTitle = document.title;
+    const addrSafe = (state.addr || 'Adres').replace(/[^\p{L}0-9 _-]/gu,'').replace(/\s+/g,'_');
+    document.title = `Pomiary_${state.date || new Date().toISOString().slice(0,10)}_${addrSafe}`;
+    window.print();
+    setTimeout(()=>{ document.title = oldTitle; }, 800);
+  });
+
+  render();
+  if ('serviceWorker' in navigator) { window.addEventListener('load', ()=>{ navigator.serviceWorker.register('/service-worker.js'); }); }
+})();</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+LoopCheck PWA — Zmax liczone dla U₀ = 230 V (na stałe). Wbudowane ETI NEOZED, import CSV, PDF/CSV, offline.

@@ -1,0 +1,10 @@
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Node / tooling (not used, but future-proof)
+node_modules/
+dist/
+.cache/
+.vercel/
